@@ -6,7 +6,7 @@ from django.db import transaction
 from contests.models import AuditLog, Contest
 from contests.services import contest_digest
 from judge.judging import judge_solution
-from judge.sandbox import check_environment
+from judge.sandbox import SandboxError, check_environment
 
 
 class Command(BaseCommand):
@@ -23,8 +23,8 @@ class Command(BaseCommand):
             if not actor.has_perm("contests.change_contest"):
                 raise CommandError("Actor needs contest change permission.")
             contest = Contest.objects.get(slug=options["slug"], status="DRAFT")
-            digest = contest_digest(contest)
-            problems = list(contest.problems.all())
+            problems = list(contest.problems.prefetch_related("tests").order_by("id"))
+            digest = contest_digest(contest, problems)
             if not problems:
                 raise CommandError("Contest needs at least one problem.")
             for problem in problems:
@@ -46,12 +46,14 @@ class Command(BaseCommand):
                 if contest.status != "DRAFT" or contest_digest(contest) != digest:
                     raise CommandError("Definitions changed during verification.")
                 contest.verified_digest = digest
-                contest.save()
+                contest.save(update_fields=["verified_digest"])
                 AuditLog.objects.create(
                     actor=actor, action="Contest verified",
                     affected_object=f"contests.Contest:{contest.pk}",
                     summary="All reference solutions passed in Isolate",
                 )
-        except (ValidationError, Contest.DoesNotExist, User.DoesNotExist) as error:
+        except (
+            ValidationError, SandboxError, Contest.DoesNotExist, User.DoesNotExist,
+        ) as error:
             raise CommandError(str(error)) from error
         self.stdout.write(self.style.SUCCESS("Verified. Publish through Django Admin."))

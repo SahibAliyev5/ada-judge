@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <h1>{{ problem.code }} — {{ problem.title }}</h1>
-<p class="muted">C++ time: {{ problem.time_limit_ms }} ms · Python: 3× C++ time · Memory: {{ problem.memory_limit_mb }} MB</p>
+<p class="muted">C++ time: {{ problem.time_limit_ms }} ms · Python: {{ python_time_limit_ms }} ms · Memory: {{ problem.memory_limit_mb }} MB</p>
 <section class="card">
 <div class="prose">{{ problem.statement }}</div>
 <h2>Input</h2><div class="prose">{{ problem.input_description }}</div>

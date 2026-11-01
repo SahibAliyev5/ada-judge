@@ -1,6 +1,13 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin
-from django.contrib.auth.models import User
+from django.contrib.auth.admin import GroupAdmin, UserAdmin
+from django.contrib.auth.models import Group, User
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404
+from django.template.response import TemplateResponse
+from django.urls import path, reverse
+from django.utils.html import format_html
+from django_otp.plugins.otp_totp.admin import TOTPDeviceAdmin
+from django_otp.plugins.otp_totp.models import TOTPDevice
 
 from .models import (
     AuditLog, Contest, ContestParticipant, Problem, Submission, TestCase,
@@ -43,10 +50,34 @@ class FrozenAdmin(admin.ModelAdmin):
 
 @admin.register(Contest)
 class ContestAdmin(FrozenAdmin):
-    list_display = ["title", "starts_at", "ends_at", "status"]
+    list_display = ["title", "starts_at", "ends_at", "status", "results_link"]
     list_filter = ["status"]
     prepopulated_fields = {"slug": ["title"]}
     readonly_fields = ["created_by", "verified_digest"]
+
+    @admin.display(description="Results")
+    def results_link(self, obj):
+        url = reverse("admin:contest_results", args=[obj.pk])
+        return format_html('<a href="{}">Standings</a>', url)
+
+    def get_urls(self):
+        return [path(
+            "<int:contest_id>/results/", self.admin_site.admin_view(self.results),
+            name="contest_results",
+        )] + super().get_urls()
+
+    def results(self, request, contest_id):
+        from .services import leaderboard
+
+        contest = get_object_or_404(Contest, pk=contest_id)
+        if not self.has_view_permission(request, contest):
+            raise PermissionDenied
+        problems, rows = leaderboard(contest)
+        context = {
+            **self.admin_site.each_context(request), "title": contest.title,
+            "problems": problems, "rows": rows,
+        }
+        return TemplateResponse(request, "admin/contest_results.html", context)
 
     def save_model(self, request, obj, form, change):
         if not change:
@@ -91,6 +122,9 @@ class SubmissionAdmin(admin.ModelAdmin):
     def has_rejudge_permission(self, request):
         return request.user.has_perm("contests.rejudge_submission")
 
+    def has_change_permission(self, request, obj=None):
+        return False
+
     def has_add_permission(self, request):
         return False
 
@@ -114,7 +148,19 @@ class AuditAdmin(admin.ModelAdmin):
         return False
 
 
-class AuditedUserAdmin(UserAdmin):
+# Account permissions and MFA devices are controlled only by superusers.
+class SuperuserChanges:
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+
+class AuditedUserAdmin(SuperuserChanges, UserAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         if {"is_staff", "is_superuser", "groups", "user_permissions"} & set(
@@ -127,6 +173,33 @@ class AuditedUserAdmin(UserAdmin):
             )
 
 
+class RestrictedGroupAdmin(SuperuserChanges, GroupAdmin):
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        AuditLog.objects.create(
+            actor=request.user, action="Group permissions changed",
+            affected_object=f"auth.Group:{obj.pk}", summary="Group saved in admin",
+        )
+
+
+class RestrictedDeviceAdmin(SuperuserChanges, TOTPDeviceAdmin):
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        AuditLog.objects.create(
+            actor=request.user, action="Staff MFA device changed",
+            affected_object=f"otp_totp.TOTPDevice:{obj.pk}",
+            summary="MFA device saved in admin",
+        )
+
+
 admin.site.unregister(User)
 admin.site.register(User, AuditedUserAdmin)
+admin.site.unregister(Group)
+admin.site.register(Group, RestrictedGroupAdmin)
+admin.site.unregister(TOTPDevice)
+admin.site.register(TOTPDevice, RestrictedDeviceAdmin)
+
 admin.site.site_header = "University Contest Administration"

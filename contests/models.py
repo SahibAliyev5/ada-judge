@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import (
+    MaxValueValidator, MinValueValidator, RegexValidator,
+)
 from django.db import models, transaction
 from django.db.models import F, Q
 from django.utils import timezone
@@ -67,9 +69,11 @@ class Contest(models.Model):
             super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        if self.status == "PUBLISHED":
-            raise ValidationError("Published contests cannot be deleted.")
-        return super().delete(*args, **kwargs)
+        with transaction.atomic():
+            previous = Contest.objects.select_for_update().get(pk=self.pk)
+            if previous.status == "PUBLISHED":
+                raise ValidationError("Published contests cannot be deleted.")
+            return super().delete(*args, **kwargs)
 
 
 class ContestParticipant(models.Model):
@@ -92,10 +96,16 @@ class FrozenDefinition(models.Model):
     class Meta:
         abstract = True
 
+    def clean(self):
+        if self.get_contest_id() and Contest.objects.filter(
+            pk=self.get_contest_id(), status="PUBLISHED",
+        ).exists():
+            raise ValidationError("Published problem definitions are frozen.")
+
     def get_contest_id(self):
         if isinstance(self, Problem):
             return self.contest_id
-        return self.problem.contest_id
+        return self.problem.contest_id if self.problem_id else None
 
     def save(self, *args, **kwargs):
         with transaction.atomic():
@@ -125,7 +135,9 @@ class Problem(FrozenDefinition):
     contest = models.ForeignKey(
         Contest, on_delete=models.CASCADE, related_name="problems",
     )
-    code = models.CharField(max_length=8)
+    code = models.CharField(
+        max_length=8, validators=[RegexValidator(r"^[A-Z][A-Z0-9]{0,7}$")],
+    )
     title = models.CharField(max_length=200)
     statement = models.TextField()
     input_description = models.TextField()
@@ -180,6 +192,7 @@ class TestCase(FrozenDefinition):
         )]
 
     def clean(self):
+        super().clean()
         if not self.problem_id:
             return
 

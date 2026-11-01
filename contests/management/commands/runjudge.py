@@ -3,6 +3,7 @@ import time
 from django.core.management.base import BaseCommand, CommandError
 from django.db import close_old_connections
 
+from judge.judging import check_runtime
 from judge.sandbox import SandboxError, check_environment
 from judge.worker import claim_submission, process_submission
 
@@ -16,6 +17,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         try:
             check_environment()
+            check_runtime()
         except SandboxError as error:
             raise CommandError(str(error)) from error
         try:

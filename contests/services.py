@@ -1,21 +1,33 @@
 import hashlib
 import json
+from datetime import timedelta
 
-from django.core.exceptions import PermissionDenied
+from django.conf import settings
+from django.contrib.auth.models import User
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.db.models.functions import Now
 from django.http import Http404
 from django.utils import timezone
 
-from .models import Contest
+from .models import (
+    LANGUAGES, AuditLog, Contest, ContestParticipant, Submission, validate_source,
+)
 
 
-def contest_digest(contest):
+def contest_digest(contest, problems=None):
+    if problems is None:
+        problems = contest.problems.prefetch_related("tests").order_by("id")
     definitions = []
-    for problem in contest.problems.order_by("id"):
+    for problem in problems:
         definition = {
             field.attname: getattr(problem, field.attname)
             for field in problem._meta.fields
         }
-        definition["tests"] = list(problem.tests.values())
+        definition["tests"] = [
+            {field.attname: getattr(test, field.attname) for field in test._meta.fields}
+            for test in problem.tests.all()
+        ]
         definitions.append(definition)
     payload = json.dumps(definitions, sort_keys=True).encode()
     return hashlib.sha256(payload).hexdigest()
@@ -34,29 +46,27 @@ def participant_contest(user, slug, require_started=False):
 
 
 def create_submission(user, contest, problem, language, source):
-    from datetime import timedelta
-
-    from django.conf import settings
-    from django.contrib.auth.models import User
-    from django.core.exceptions import ValidationError
-    from django.db import transaction
-    from django.db.models.functions import Now
-
-    from .models import ContestParticipant, LANGUAGES, Submission, validate_source
-
     validate_source(source)
     if not source.strip() or language not in dict(LANGUAGES):
         raise ValidationError("Select a supported language and enter source code.")
     with transaction.atomic():
         # One lock per account serializes rate checks across all contests.
-        User.objects.select_for_update().get(pk=user.pk, is_active=True)
-        received_at = User.objects.filter(pk=user.pk).annotate(
-            received=Now(),
-        ).values_list("received", flat=True).get()
+        account = User.objects.select_for_update().filter(
+            pk=user.pk, is_active=True,
+        ).first()
+        if account is None:
+            raise PermissionDenied("An active account is required.")
+        contest = Contest.objects.select_for_update(no_key=True).filter(
+            pk=contest.pk, status="PUBLISHED",
+        ).first()
+        if contest is None:
+            raise ValidationError("This contest is not available for submissions.")
         enrolled = ContestParticipant.objects.select_for_update().filter(
             user=user, contest=contest,
         ).exists()
-        contest = Contest.objects.get(pk=contest.pk, status="PUBLISHED")
+        received_at = User.objects.filter(pk=user.pk).annotate(
+            received=Now(),
+        ).values_list("received", flat=True).get()
         if not enrolled:
             raise PermissionDenied("You are not enrolled in this contest.")
         if not contest.starts_at <= received_at < contest.ends_at:
@@ -79,8 +89,6 @@ def create_submission(user, contest, problem, language, source):
 
 
 def leaderboard(contest):
-    from .models import ContestParticipant, Submission
-
     problems = list(contest.problems.all())
     rows = {}
     participants = ContestParticipant.objects.filter(
@@ -130,13 +138,14 @@ def leaderboard(contest):
 
 
 def rejudge_submissions(actor, submissions):
-    from django.db import transaction
-
-    from .models import AuditLog, Submission
-
     if not actor.has_perm("contests.rejudge_submission"):
         raise PermissionDenied
     with transaction.atomic():
+        # Serialize administrative rejudging with a contest correction pause.
+        contest_ids = set(submissions.values_list("contest_id", flat=True))
+        list(Contest.objects.select_for_update().filter(
+            pk__in=contest_ids,
+        ).order_by("pk"))
         for submission in submissions.select_for_update().order_by("pk"):
             Submission.objects.filter(pk=submission.pk).update(
                 status="QUEUED", verdict="QUEUED", execution_time_ms=0,

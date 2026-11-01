@@ -1,4 +1,4 @@
-{% load static %}<!doctype html>
+{% load static tz %}{% get_current_timezone as university_timezone %}<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -22,7 +22,7 @@
   {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
   {% if contest %}
   <a href="{% url 'contest_detail' contest.slug %}">{{ contest.title }}</a>
-  <p class="muted">{{ contest.starts_at }} – {{ contest.ends_at }} ({{ TIME_ZONE|default:'university local time' }})</p>
+  <p class="muted">{{ contest.starts_at }} – {{ contest.ends_at }} ({{ university_timezone }})</p>
   <p data-start="{{ contest.starts_at|date:'c' }}" data-end="{{ contest.ends_at|date:'c' }}" id="timer"></p>
   <nav class="contest-nav" aria-label="Contest">
     <a href="{% url 'contest_detail' contest.slug %}">Problems</a>

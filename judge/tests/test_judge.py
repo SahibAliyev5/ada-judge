@@ -119,3 +119,67 @@ def test_compiler_failure_is_ce(problem):
         result = judge_solution(problem, "cpp20", "invalid")
     assert result["verdict"] == "CE"
     assert "/box" not in result["compiler_message"]
+
+
+def test_missing_accounting_is_infrastructure_error(tmp_path):
+    from judge.sandbox import parse_metadata
+
+    path = tmp_path / "metadata"
+    path.write_text("time:0.01\nexitcode:0\n")
+    with pytest.raises(SandboxError):
+        parse_metadata(path)
+
+
+def test_output_symlinks_are_not_followed(tmp_path):
+    from judge.sandbox import read_file
+
+    secret = tmp_path / "secret"
+    secret.write_text("confidential")
+    link = tmp_path / "output"
+    link.symlink_to(secret)
+    with pytest.raises(SandboxError):
+        read_file(link, 1024)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_locked_job_is_skipped(queued):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from django.db import close_old_connections, transaction
+
+    second = Submission.objects.create(
+        user=queued.user, contest=queued.contest, problem=queued.problem,
+        language="python3", source_code="print(8)",
+    )
+    locked = Event()
+    release = Event()
+
+    def lock_first_job():
+        close_old_connections()
+        try:
+            with transaction.atomic():
+                Submission.objects.select_for_update().get(pk=queued.pk)
+                locked.set()
+                assert release.wait(timeout=10)
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(lock_first_job)
+        try:
+            assert locked.wait(timeout=10)
+            assert claim_submission().pk == second.pk
+        finally:
+            release.set()
+        future.result(timeout=10)
+    queued.refresh_from_db()
+    assert queued.status == "QUEUED"
+
+
+def test_runtime_self_check_refuses_bad_results():
+    from judge.judging import check_runtime
+
+    with patch("judge.judging.judge_solution", return_value={"verdict": "WA"}):
+        with pytest.raises(SandboxError):
+            check_runtime()

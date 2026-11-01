@@ -6,13 +6,15 @@ SECRET_KEY = os.environ["SECRET_KEY"]
 DEBUG = os.getenv("DEBUG", "False") == "True"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "config.apps.ContestAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "axes",
+    "django_otp",
+    "django_otp.plugins.otp_totp",
     "contests",
 ]
 MIDDLEWARE = [
@@ -21,6 +23,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
@@ -80,7 +83,7 @@ SECURE_HSTS_PRELOAD = HTTPS
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SESSION_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = "DENY"
-DATA_UPLOAD_MAX_MEMORY_SIZE = 3 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = 8 * 1024 * 1024
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 200
 MAX_SOURCE_BYTES = 64 * 1024
 MAX_TEST_BYTES = 1024 * 1024
@@ -100,3 +103,16 @@ JUDGE_COMPILE_MEMORY_MB = 512
 JUDGE_COMPILE_FILE_KB = 16384
 JUDGE_DISK_BLOCKS = 65536
 JUDGE_DISK_INODES = 256
+
+REQUIRE_ADMIN_MFA = not DEBUG
+OTP_TOTP_ISSUER = "University Contest Judge"
+OTP_ADMIN_HIDE_SENSITIVE_DATA = True
+DATABASES["default"]["OPTIONS"] = {
+    "sslmode": os.getenv("POSTGRES_SSLMODE", "prefer"),
+}
+if os.getenv("POSTGRES_SSLROOTCERT"):
+    DATABASES["default"]["OPTIONS"]["sslrootcert"] = os.environ["POSTGRES_SSLROOTCERT"]
+JUDGE_PYTHON_TIME_MULTIPLIER = float(os.getenv("JUDGE_PYTHON_TIME_MULTIPLIER", "3"))
+# Set only when Gunicorn is loopback-only behind the supplied trusted proxy.
+if os.getenv("TRUST_HTTPS_PROXY", "False") == "True":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

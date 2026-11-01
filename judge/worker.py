@@ -7,7 +7,6 @@ from django.conf import settings
 from django.db import close_old_connections, transaction
 from django.db.models import Q
 from django.db.models.functions import Now
-from django.utils import timezone
 
 from contests.models import Submission
 from .judging import judge_solution
@@ -21,27 +20,32 @@ class LostClaim(Exception):
 
 def claim_submission():
     with transaction.atomic():
-        submission = Submission.objects.select_for_update(skip_locked=True).filter(
+        submission = Submission.objects.select_for_update(
+            skip_locked=True, of=("self",),
+        ).filter(contest__status="PUBLISHED").filter(
             Q(status="QUEUED") | Q(status="RUNNING", worker_lease_until__lte=Now()),
-        ).order_by("submitted_at", "id").first()
+        ).annotate(db_now=Now()).order_by("submitted_at", "id").first()
         if submission is None:
             return None
         if submission.judge_attempts >= settings.JUDGE_MAX_ATTEMPTS:
             submission.status = "DONE"
             submission.verdict = "SYSTEM_ERROR"
-            submission.finished_at = timezone.now()
+            submission.finished_at = submission.db_now
             submission.worker_claim_token = None
             submission.worker_lease_until = None
         else:
             submission.status = "RUNNING"
             submission.verdict = "RUNNING"
             submission.worker_claim_token = uuid.uuid4()
-            submission.worker_lease_until = timezone.now() + timedelta(
+            submission.worker_lease_until = submission.db_now + timedelta(
                 seconds=settings.JUDGE_LEASE_SECONDS,
             )
-            submission.started_at = timezone.now()
+            submission.started_at = submission.db_now
             submission.judge_attempts += 1
-        submission.save()
+        submission.save(update_fields=[
+            "status", "verdict", "finished_at", "worker_claim_token",
+            "worker_lease_until", "started_at", "judge_attempts",
+        ])
         return submission
 
 

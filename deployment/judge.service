@@ -1,0 +1,22 @@
+[Unit]
+Description=University contest judge
+Requires=isolate.service
+After=network-online.target isolate.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=contest-judge
+Group=contest-judge
+WorkingDirectory=/opt/contest
+EnvironmentFile=/etc/university-judge.env
+ExecStart=/opt/contest/.venv/bin/python manage.py runjudge
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=20
+UMask=0077
+# Isolate needs its audited setuid helper: do not set NoNewPrivileges=true.
+
+[Install]
+WantedBy=multi-user.target

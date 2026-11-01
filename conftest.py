@@ -49,3 +49,9 @@ def published(contest, problem, student):
     contest.save()
     ContestParticipant.objects.create(contest=contest, user=student)
     return contest
+
+
+@pytest.fixture(autouse=True)
+def permission_test_settings(settings):
+    # Permission tests use force_login; MFA is covered separately.
+    settings.REQUIRE_ADMIN_MFA = False

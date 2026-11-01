@@ -1,9 +1,13 @@
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import get_object_or_404, render
+from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import Contest
-from .services import participant_contest
+from .forms import SubmissionForm
+from .models import Contest, Submission
+from .services import create_submission, leaderboard, participant_contest
 
 
 @login_required
@@ -29,17 +33,14 @@ def problem_detail(request, slug, code):
     return render(request, "contests/problem.html", {
         "contest": contest, "problem": problem,
         "samples": problem.tests.filter(is_sample=True),
+        "python_time_limit_ms": int(
+            problem.time_limit_ms * settings.JUDGE_PYTHON_TIME_MULTIPLIER,
+        ),
     })
 
 
 @login_required
 def submit_solution(request, slug):
-    from django.core.exceptions import ValidationError
-    from django.shortcuts import redirect
-
-    from .forms import SubmissionForm
-    from .services import create_submission
-
     contest = participant_contest(request.user, slug, require_started=True)
     form = SubmissionForm(request.POST or None, contest=contest)
     if request.method == "POST" and form.is_valid():
@@ -57,10 +58,6 @@ def submit_solution(request, slug):
 
 @login_required
 def submission_history(request, slug):
-    from django.core.paginator import Paginator
-
-    from .models import Submission
-
     contest = participant_contest(request.user, slug)
     submissions = Submission.objects.filter(
         contest=contest, user=request.user,
@@ -71,8 +68,6 @@ def submission_history(request, slug):
 
 @login_required
 def submission_detail(request, slug, pk):
-    from .models import Submission
-
     contest = participant_contest(request.user, slug)
     submission = get_object_or_404(
         Submission.objects.defer("diagnostics"),
@@ -85,10 +80,6 @@ def submission_detail(request, slug, pk):
 
 @login_required
 def contest_leaderboard(request, slug):
-    from django.views.decorators.cache import never_cache
-
-    from .services import leaderboard
-
     contest = participant_contest(request.user, slug, require_started=True)
     problems, rows = leaderboard(contest)
     template = "contests/leaderboard.html"

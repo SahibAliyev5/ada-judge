@@ -61,7 +61,9 @@ def test_rate_limits(student, published, problem):
 
 
 def test_private_sources(client, student, published, problem):
-    submission = create_submission(student, published, problem, "python3", "private_source")
+    submission = create_submission(
+        student, published, problem, "python3", "private_source",
+    )
     outsider = User.objects.create_user("outsider")
     from contests.models import ContestParticipant
 
@@ -127,3 +129,14 @@ def test_concurrent_submission_limits(student, published, problem):
         results = list(executor.map(lambda _: submit(), range(2)))
     assert sorted(results) == ["created", "limited"]
     assert Submission.objects.count() == 1
+
+
+def test_receipt_uses_database_clock(student, published, problem):
+    from unittest.mock import patch
+
+    fake_time = published.ends_at + timedelta(days=5)
+    with patch("contests.services.timezone.now", return_value=fake_time):
+        submission = create_submission(
+            student, published, problem, "python3", "print(8)",
+        )
+    assert published.starts_at <= submission.submitted_at < published.ends_at

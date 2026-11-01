@@ -116,6 +116,8 @@ def parse_metadata(path):
             fields[key] = value
     if fields.get("status") == "XX":
         raise SandboxError("Isolate reported an infrastructure failure.")
+    if not fields.get("status") and "exitcode" not in fields:
+        raise SandboxError("Missing program exit status.")
     if "time" not in fields or "cg-mem" not in fields:
         raise SandboxError("CPU or cgroup memory accounting unavailable.")
     try:
@@ -149,13 +151,14 @@ def execute(files, command, cpu_seconds, memory_mb, compiling=False):
             path = directory / name
             path.write_bytes(content)
             path.chmod(0o755 if name == "program" else 0o644)
-        file_kb = settings.JUDGE_OUTPUT_BYTES // 1024
+        file_kb = math.ceil(settings.JUDGE_OUTPUT_BYTES / 1024) + 1
         if compiling:
             file_kb = settings.JUDGE_COMPILE_FILE_KB
         wall_seconds = cpu_seconds * 3 + 2
         arguments = [
             *base, "--no-default-dirs", *mounts,
-            f"--dir=/box={directory}:rw", f"--dir=/tmp={directory}:rw", "--dir=/proc=proc",
+            f"--dir=/box={directory}:rw", f"--dir=/tmp={directory}:rw",
+            "--dir=/proc=proc",
             "--chdir=/box", "--env=PATH=/usr/bin:/bin", "--env=LANG=C",
             "--env=HOME=/box", "--env=TMPDIR=/box", "--syscalls=31",
             f"--time={cpu_seconds}", f"--wall-time={wall_seconds}",
@@ -171,13 +174,14 @@ def execute(files, command, cpu_seconds, memory_mb, compiling=False):
         if result.returncode == 1 and verdict == "AC":
             raise SandboxError("Inconsistent Isolate exit status.")
         output = read_file(directory / "output", settings.JUDGE_OUTPUT_BYTES)
-        errors = read_file(directory / "errors", 8192)
+        errors = read_file(directory / "errors", settings.JUDGE_OUTPUT_BYTES)
         artifact = b""
         if compiling and verdict == "AC":
             artifact = read_file(directory / "program", file_kb * 1024)
             if not artifact or len(artifact) > file_kb * 1024:
                 raise SandboxError("Missing or oversized compiler artifact.")
-        if len(output) > settings.JUDGE_OUTPUT_BYTES:
+        if (len(output) > settings.JUDGE_OUTPUT_BYTES
+                or len(errors) > settings.JUDGE_OUTPUT_BYTES):
             verdict = "OLE"
         return {
             "verdict": verdict, "output": output, "errors": errors[:8192],

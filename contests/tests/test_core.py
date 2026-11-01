@@ -8,7 +8,7 @@ from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from contests.models import ContestParticipant, TestCase
+from contests.models import ContestParticipant, TestCase as ProblemTest
 
 pytestmark = pytest.mark.django_db
 
@@ -69,7 +69,8 @@ def test_early_access_blocked(client, contest, problem, student):
 def test_unenrolled_user_cannot_access(client, published, problem):
     outsider = User.objects.create_user("outsider")
     client.force_login(outsider)
-    assert client.get(reverse("contest_detail", args=[published.slug])).status_code == 404
+    response = client.get(reverse("contest_detail", args=[published.slug]))
+    assert response.status_code == 404
     assert client.get(reverse(
         "problem_detail", args=[published.slug, problem.code],
     )).status_code == 404
@@ -99,12 +100,12 @@ def test_published_definitions_frozen(published, problem):
 def test_test_limits(problem):
     with override_settings(MAX_TEST_BYTES=4):
         with pytest.raises(ValidationError):
-            TestCase.objects.create(
+            ProblemTest.objects.create(
                 problem=problem, input_text="12345", position=99,
             )
     with override_settings(MAX_CONTEST_TEST_BYTES=1):
         with pytest.raises(ValidationError):
-            TestCase.objects.create(problem=problem, input_text="1", position=99)
+            ProblemTest.objects.create(problem=problem, input_text="1", position=99)
 
 
 def test_csrf_protection():
@@ -114,7 +115,9 @@ def test_csrf_protection():
 
 def test_login_rate_limit(client, student):
     for _ in range(5):
-        client.post("/accounts/login/", {"username": student.username, "password": "bad"})
+        client.post("/accounts/login/", {
+            "username": student.username, "password": "bad",
+        })
     response = client.post("/accounts/login/", {
         "username": student.username, "password": "student-test-password",
     })
