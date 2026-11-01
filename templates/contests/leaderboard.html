@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Leaderboard</h1>
+<p class="muted">ICPC scoring · 20 minutes per incorrect attempt before acceptance · Updates every 10 seconds</p>
+<div id="standings" data-poll-url="{% url 'leaderboard' contest.slug %}?partial=1">
+{% include 'contests/standings_table.html' %}
+</div>
+<p id="poll-status" role="status"></p>
+{% endblock %}

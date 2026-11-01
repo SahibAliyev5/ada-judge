@@ -225,6 +225,7 @@ class Submission(models.Model):
 
     class Meta:
         ordering = ["submitted_at", "id"]
+        permissions = [("rejudge_submission", "Can rejudge submissions")]
         indexes = [
             models.Index(fields=["status", "worker_lease_until", "id"]),
             models.Index(fields=["user", "-submitted_at"]),

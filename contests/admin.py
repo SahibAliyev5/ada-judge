@@ -1,7 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
 
 from .models import (
     AuditLog, Contest, ContestParticipant, Problem, Submission, TestCase,
@@ -80,7 +79,17 @@ class SubmissionAdmin(admin.ModelAdmin):
     list_display = ["id", "user", "contest", "problem", "verdict", "submitted_at"]
     list_filter = ["contest", "verdict"]
     readonly_fields = [field.name for field in Submission._meta.fields]
-    actions = None
+    actions = ["rejudge"]
+
+    @admin.action(description="Rejudge selected submissions", permissions=["rejudge"])
+    def rejudge(self, request, queryset):
+        from .services import rejudge_submissions
+
+        rejudge_submissions(request.user, queryset)
+        self.message_user(request, "Selected submissions queued for rejudging.")
+
+    def has_rejudge_permission(self, request):
+        return request.user.has_perm("contests.rejudge_submission")
 
     def has_add_permission(self, request):
         return False

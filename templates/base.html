@@ -24,6 +24,12 @@
   <a href="{% url 'contest_detail' contest.slug %}">{{ contest.title }}</a>
   <p class="muted">{{ contest.starts_at }} – {{ contest.ends_at }} ({{ TIME_ZONE|default:'university local time' }})</p>
   <p data-start="{{ contest.starts_at|date:'c' }}" data-end="{{ contest.ends_at|date:'c' }}" id="timer"></p>
+  <nav class="contest-nav" aria-label="Contest">
+    <a href="{% url 'contest_detail' contest.slug %}">Problems</a>
+    <a href="{% url 'submit_solution' contest.slug %}">Submit</a>
+    <a href="{% url 'submission_history' contest.slug %}">My submissions</a>
+    <a href="{% url 'leaderboard' contest.slug %}">Leaderboard</a>
+  </nav>
   {% endif %}
   {% block content %}{% endblock %}
 </main>

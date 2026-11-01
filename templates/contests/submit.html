@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Submit a solution</h1>
+<p class="muted">C++20 or Python 3 · Maximum 64 KB · One submission every 15 seconds</p>
+<form method="post" class="card">{% csrf_token %}{{ form.as_p }}
+<button class="primary">Submit for judging</button></form>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Submission #{{ submission.pk }}</h1>
+<section class="card">
+<p><strong>{{ submission.verdict }}</strong> · {{ submission.get_language_display }}</p>
+<p>{{ submission.execution_time_ms }} ms · {{ submission.memory_used_kb }} KB</p>
+{% if submission.status != 'DONE' %}<p>Judging is in progress. Refresh this page for an update.</p>{% endif %}
+{% if submission.verdict == 'SYSTEM_ERROR' %}<p>The judge could not evaluate this submission. Contact an administrator.</p>{% endif %}
+{% if submission.verdict == 'CE' %}<h2>Compiler diagnostics</h2><pre>{{ submission.compiler_message }}</pre>{% endif %}
+<h2>Your source</h2><pre>{{ submission.source_code }}</pre>
+</section>
+{% endblock %}

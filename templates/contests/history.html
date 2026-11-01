@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>My submissions</h1>
+<div class="table-wrap"><table>
+<thead><tr><th>ID</th><th>Problem</th><th>Language</th><th>Verdict</th><th>Submitted</th></tr></thead>
+<tbody>{% for submission in page %}<tr>
+<td><a href="{% url 'submission_detail' contest.slug submission.pk %}">#{{ submission.pk }}</a></td>
+<td>{{ submission.problem.code }}</td><td>{{ submission.get_language_display }}</td>
+<td>{{ submission.verdict }}</td><td>{{ submission.submitted_at }}</td>
+</tr>{% empty %}<tr><td colspan="5">No submissions yet.</td></tr>{% endfor %}</tbody>
+</table></div>
+<nav aria-label="Pagination">
+{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Previous</a>{% endif %}
+<span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+{% if page.has_next %}<a href="?page={{ page.next_page_number }}">Next</a>{% endif %}
+</nav>
+{% endblock %}
