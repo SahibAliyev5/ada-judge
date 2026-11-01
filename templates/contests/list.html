@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<p class="eyebrow">YOUR CONTESTS</p><h1>Ready for the next challenge?</h1>
+<p class="muted">Explore the contests you are enrolled in.</p>
+<div class="grid">
+{% for contest in contests %}
+<article class="card">
+<h2><a href="{% url 'contest_detail' contest.slug %}">{{ contest.title }}</a></h2>
+<p>{{ contest.description|truncatewords:35 }}</p>
+<p class="muted">{{ contest.starts_at }} – {{ contest.ends_at }}</p>
+</article>
+{% empty %}<p>No contests yet. Your administrator will enroll you.</p>{% endfor %}
+</div>
+{% endblock %}

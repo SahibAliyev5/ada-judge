@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>{{ contest.title }}</h1><p class="prose">{{ contest.description }}</p>
+{% if started %}
+<h2>Problems</h2>
+<div class="card">
+{% for problem in contest.problems.all %}
+<p><a href="{% url 'problem_detail' contest.slug problem.code %}">{{ problem.code }} — {{ problem.title }}</a></p>
+{% endfor %}
+</div>
+{% else %}<p>Problem statements will appear when the contest starts.</p>{% endif %}
+{% endblock %}

@@ -1,0 +1,32 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}University Contest Judge{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'style.css' %}">
+  <script src="{% static 'contest.js' %}" defer></script>
+</head>
+<body>
+<header>
+  <a class="brand" href="{% url 'contest_list' %}">University <strong>Contest Judge</strong></a>
+  {% if user.is_authenticated %}
+  <nav aria-label="Account">
+    <span>{{ user.username }}</span>
+    {% if user.is_staff %}<a href="{% url 'admin:index' %}">Administration</a>{% endif %}
+    <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button>Log out</button></form>
+  </nav>
+  {% endif %}
+</header>
+<main>
+  {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
+  {% if contest %}
+  <a href="{% url 'contest_detail' contest.slug %}">{{ contest.title }}</a>
+  <p class="muted">{{ contest.starts_at }} – {{ contest.ends_at }} ({{ TIME_ZONE|default:'university local time' }})</p>
+  <p data-start="{{ contest.starts_at|date:'c' }}" data-end="{{ contest.ends_at|date:'c' }}" id="timer"></p>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+<footer>University programming contests · Server time controls all deadlines</footer>
+</body>
+</html>

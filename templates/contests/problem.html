@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>{{ problem.code }} — {{ problem.title }}</h1>
+<p class="muted">C++ time: {{ problem.time_limit_ms }} ms · Python: 3× C++ time · Memory: {{ problem.memory_limit_mb }} MB</p>
+<section class="card">
+<div class="prose">{{ problem.statement }}</div>
+<h2>Input</h2><div class="prose">{{ problem.input_description }}</div>
+<h2>Output</h2><div class="prose">{{ problem.output_description }}</div>
+<h2>Constraints</h2><div class="prose">{{ problem.constraints_text }}</div>
+<h2>Examples</h2>
+{% for sample in samples %}
+<h3>Input</h3><pre>{{ sample.input_text }}</pre>
+<h3>Output</h3><pre>{{ sample.expected_output }}</pre>
+{% endfor %}
+</section>
+{% endblock %}

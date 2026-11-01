@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card narrow">
+<p class="eyebrow">COMPETE · LEARN · SOLVE</p>
+<h1>Welcome back</h1>
+<p>Sign in with your university contest account.</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}
+<input type="hidden" name="next" value="{{ next }}">
+<button class="primary">Sign in</button></form>
+<p class="muted">Contact your contest administrator for an account.</p>
+</section>
+{% endblock %}
